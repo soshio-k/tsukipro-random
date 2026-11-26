@@ -1,18 +1,26 @@
-const TALENT_LIST_URL = "https://tsukino-pro.com/talent_artist/";
-const FALLBACK_URL = TALENT_LIST_URL;
+const TALENT_INDEX_URL =
+  "https://tsukino-pro.com/talent_artist/talent_artist-cat2/tsukiuta-ta/shiwasu-kakeru-ta/";
+
+const FALLBACK_URL = TALENT_INDEX_URL;
+const OFFICIAL_ORIGIN = "https://tsukino-pro.com";
 
 module.exports = async function handler(req, res) {
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader(
+    "Cache-Control",
+    "no-store, no-cache, must-revalidate, proxy-revalidate"
+  );
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
 
   try {
-    const response = await fetch(TALENT_LIST_URL, {
+    // This individual profile page contains the official sidebar section
+    // "タレント名で探す", including direct links for all listed talents.
+    const response = await fetch(TALENT_INDEX_URL, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; TsukiproRandomJump/1.0)",
-        "Accept": "text/html"
+        "User-Agent": "Mozilla/5.0 (compatible; TsukiproRandomJump/1.1)",
+        Accept: "text/html"
       },
-      signal: AbortSignal.timeout(10000)
+      signal: AbortSignal.timeout(12000)
     });
 
     if (!response.ok) {
@@ -25,39 +33,35 @@ module.exports = async function handler(req, res) {
     let match;
 
     while ((match = anchorPattern.exec(html)) !== null) {
-      const rawHref = match[1]
-        .replace(/&amp;/g, "&")
-        .replace(/&#0*39;/g, "'")
-        .trim();
-
+      const rawHref = match[1].replace(/&amp;/g, "&").trim();
       let url;
       try {
-        url = new URL(rawHref, TALENT_LIST_URL);
+        url = new URL(rawHref, TALENT_INDEX_URL);
       } catch {
         continue;
       }
 
-      // Official individual talent profiles use URLs ending in "-ta/".
-      // Exclude category pages and any off-domain links.
       const parts = url.pathname.split("/").filter(Boolean);
-      const isTalentProfile =
-        url.origin === "https://tsukino-pro.com" &&
-        parts.length >= 4 &&
+      // Individual talent profile URLs have four path parts and end in -ta.
+      // Category pages have only three path parts; voice actor links are excluded.
+      const isIndividualTalentProfile =
+        url.origin === OFFICIAL_ORIGIN &&
+        parts.length === 4 &&
         parts[0] === "talent_artist" &&
-        parts[parts.length - 1].endsWith("-ta");
+        parts[1] === "talent_artist-cat2" &&
+        parts[3].endsWith("-ta");
 
-      if (isTalentProfile) {
-        profileUrls.add(url.origin + url.pathname);
+      if (isIndividualTalentProfile) {
+        profileUrls.add(`${OFFICIAL_ORIGIN}/${parts.join("/")}/`);
       }
     }
 
     const candidates = [...profileUrls];
-
     if (candidates.length === 0) {
-      throw new Error("No individual talent profile URLs were found.");
+      throw new Error('No individual profile links found in "タレント名で探す".');
     }
 
-    const selected = candidates[cryptoRandomIndex(candidates.length)];
+    const selected = candidates[require("node:crypto").randomInt(0, candidates.length)];
     return res.redirect(302, selected);
   } catch (error) {
     console.error("Tsukipro random redirect failed:", error);
@@ -65,7 +69,6 @@ module.exports = async function handler(req, res) {
   }
 };
 
-function cryptoRandomIndex(length) {
   // Use Node's cryptographically secure random number generator.
   return require("node:crypto").randomInt(0, length);
 }
