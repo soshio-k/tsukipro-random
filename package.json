@@ -1,0 +1,9 @@
+{
+  "name": "tsukipro-random-jump",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ツキプロ公式タレントプロフィールへランダムに転送するサイト",
+  "engines": {
+    "node": ">=18"
+  }
+}
